@@ -1,6 +1,6 @@
-# CRISPR-BacLibDesigner: 细菌CRISPR文库自动化设计工具
+# Bact-CRISPR-Library: 细菌CRISPR文库自动化设计工具
 
-`CRISPR-BacLibDesigner` 是一个功能强大的、基于命令行的Python工具，专门用于在细菌基因组中进行大规模寡核苷酸（Oligo）文库的自动化设计。它支持多种CRISPR基因编辑应用，并内置了多种智能优化策略，以确保设计出的文库具有高质量和高成功率。
+`Bact-CRISPR-Library` 是一个功能强大的、基于命令行的Python工具，专门用于在细菌基因组中进行大规模寡核苷酸（Oligo）文库的自动化设计。它支持多种CRISPR基因编辑应用，并内置了多种智能优化策略，以确保设计出的文库具有高质量和高成功率。
 
 ## ✨ 主要功能
 
@@ -36,7 +36,7 @@
 脚本通过命令行运行，基本结构如下：
 
 ```bash
-python <脚本文件名>.py <mode> [common_options] [mode_specific_options]
+python Bact-CRISPR-Library <mode> [common_options] [mode_specific_options]
 ```
 
 ### 通用参数
@@ -69,7 +69,7 @@ python <脚本文件名>.py <mode> [common_options] [mode_specific_options]
 
 **示例命令**:
 ```bash
-python crispr_designer.py knockout \
+python Bact-CRISPR-Library knockout \
   --input_fna ecoli.fna \
   --input_gff ecoli.gff \
   --output ecoli_knockout_lib.csv \
@@ -92,7 +92,7 @@ python crispr_designer.py knockout \
 
 **示例命令**:
 ```bash
-python crispr_designer.py promoter_replace \
+python Bact-CRISPR-Library promoter_replace \
   --input_fna ecoli.fna \
   --input_gff ecoli.gff \
   --output ecoli_promoter_lib.csv \
@@ -114,7 +114,7 @@ python crispr_designer.py promoter_replace \
 
 **示例命令**:
 ```bash
-python crispr_designer.py C_fusion \
+python Bact-CRISPR-Library C_fusion \
   --input_fna ecoli.fna \
   --input_gff ecoli.gff \
   --output ecoli_Cfusion_lib.csv \
@@ -174,5 +174,5 @@ GACGACTTGCTATTTCTAGCTCTAAAAC{sgRNA_fwd}GTTAAACCCTATAGTGAGTCGTATTAC{barcode}AGGTG
 
 ## 📧 联系方式
 
-- **作者**: [Your Name]
-- **邮箱**: [your.email@example.com]
+- **作者**: [Zhaohui Cai]
+- **邮箱**: [cai_zhaohui@163.com]
