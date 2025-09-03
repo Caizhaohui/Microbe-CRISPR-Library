@@ -1,178 +1,274 @@
-# Bact-CRISPR-Library: 细菌CRISPR文库自动化设计工具
+# Bact-CRISPR-Library: Bacterial CRISPR Library Design Tool
 
-`Bact-CRISPR-Library` 是一个功能强大的、基于命令行的Python工具，专门用于在细菌基因组中进行大规模寡核苷酸（Oligo）文库的自动化设计。它支持多种CRISPR基因编辑应用，并内置了多种智能优化策略，以确保设计出的文库具有高质量和高成功率。
+`Bact-CRISPR-Library` is a powerful command-line Python tool for automated, high-throughput design of CRISPR-based oligonucleotide libraries for bacterial genomes. It supports multiple CRISPR editing applications, including gene knockouts, promoter replacements, protein C-terminal fusions, gene knockdowns, and INTEGRATE/CASTs-based designs, with intelligent optimization strategies to ensure high-quality and high-success-rate libraries.
 
-## ✨ 主要功能
+## ✨ Features
 
-- **多种设计模式**: 支持三种核心的基因编辑文库设计：
-  - `knockout`: 基因敲除文库
-  - `promoter_replace`: 启动子替换文库
-  - `C_fusion`: 蛋白C端融合标签文库
-- **智能sgRNA筛选**: 集成了基于模型的sgRNA活性评分，并能优先选择最理想的切割位点。
-- **灵活的同源臂设计**: 支持自定义同源臂长度范围，并为启动子替换模式提供了独特的安全检查，以保护上游基因。
-- **支持环状与线性基因组**: 通过`--genome_type`参数，可正确处理环状（如多数细菌）和线性基因组，避免因基因组边界问题导致的设计失败。
-- **先进的酶切位点规避**: 可在设计的可变区（sgRNA, 同源臂, barcode）中规避指定的限制性酶切位点，同时豁免固定的克隆位点。
-- **自动化Barcode生成**: 为每个设计生成符合GC含量和序列复杂性要求的独特条形码（Barcode）。
-- **模板化Oligo合成**: 最终的Oligo序列是基于用户提供的模板文件生成的，具有极高的灵活性和可定制性。
+- **Design Modes**:
+  - `Knockout_Cas9`: Gene knockout library with customizable deletion lengths.
+  - `PromoterChange_Cas9`: Promoter replacement library for gene regulation.
+  - `Cfusion_Cas9`: Protein C-terminal fusion tag library.
+  - `Knockdown_Cas9`: Gene knockdown library via regulatory element insertion.
+  - `Knockout_CASTs`: Gene knockout library for INTEGRATE/CASTs systems.
+  - `PromoterChange_CASTs`: Promoter insertion library for INTEGRATE/CASTs systems.
 
-## ⚙️ 系统要求与安装
+- **Intelligent sgRNA Design**: Uses a model-based scoring system (MODEL_WEIGHTS) to prioritize optimal sgRNA cutting sites.
+- **Flexible Homology Arm Design**: Supports customizable homology arm length ranges with safety checks to protect upstream genes in promoter replacement mode.
+- **Circular and Linear Genome Support**: Handles both genome types via the `--genome_type` parameter, ensuring correct boundary processing.
+- **Restriction Site Avoidance**: Avoids user-specified restriction sites in variable regions (sgRNA, homology arms, barcode) while exempting a designated cloning site.
+- **Automated Barcode Generation**: Generates unique barcodes with GC content (30-70%) and sequence complexity constraints.
+- **Template-Based Oligo Synthesis**: Outputs oligonucleotides based on user-provided templates for high flexibility.
+- **Comprehensive Output**: Saves detailed design results in CSV format, including sgRNA sequences, homology arms, barcodes, and final oligonucleotides.
 
-**1. Python版本**:
-   - Python 3.7 或更高版本
+## ⚙️ Requirements and Installation
 
-**2. 依赖库**:
-   - `pandas`
-   - `biopython`
-   - `gffutils`
+### System Requirements
+- **Python Version**: Python 3.8 or higher
+- **Dependencies**:
+  - `pandas`: For data handling and CSV output
+  - `biopython`: For sequence manipulation and FASTA parsing
+  - `gffutils`: For GFF3 annotation parsing
 
-**3. 安装**:
-   使用pip安装所有依赖库：
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/bact-crispr-library.git
+   cd bact-crispr-library
+   ```
+
+2. Install dependencies:
    ```bash
    pip install pandas biopython gffutils
    ```
 
-## 🚀 使用方法
+3. Prepare input files (FASTA, GFF3, and synthesis template).
 
-脚本通过命令行运行，基本结构如下：
+## 🚀 Usage
+
+Run the script via the command line with a specified design mode and parameters:
 
 ```bash
-python Bact-CRISPR-Library <mode> [common_options] [mode_specific_options]
+python bact_crispr_library.py <mode> [common_options] [mode_specific_options]
 ```
 
-### 通用参数
+### Common Parameters
+These apply to all design modes:
 
-这些参数适用于所有设计模式：
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `--input_fna` | **[Required]** Path to the genome FASTA file. | `--input_fna genome.fna` |
+| `--input_gff` | **[Required]** Path to the GFF3 annotation file. | `--input_gff annotation.gff` |
+| `--output` | **[Required]** Path for the output CSV file. | `--output results.csv` |
+| `--synthesis_template` | **[Required]** Path to the oligo template file. | `--synthesis_template template.txt` |
+| `--genome_type` | Genome type: `circle` or `linear` (default: `linear`). | `--genome_type circle` |
+| `--sgRNA_num` | Number of designs per gene (default: 1). | `--sgRNA_num 2` |
+| `--barcode_len` | Barcode length (default: 8). | `--barcode_len 8` |
+| `--restriction_site` | Space-separated restriction sites to avoid in variable regions. | `--restriction_site EcoRI HindIII` |
+| `--cloning_site` | Optional restriction site allowed in the template for cloning. | `--cloning_site GGTCTC` |
 
-| 参数 | 描述 | 示例 |
-| --- | --- | --- |
-| `--input_fna` | **[必需]** 输入的基因组FASTA文件路径。 | `--input_fna genome.fna` |
-| `--input_gff` | **[必需]** 输入的GFF3基因注释文件路径。 | `--input_gff annotation.gff` |
-| `--output` | **[必需]** 输出结果的CSV文件路径。 | `--output knockout_library.csv` |
-| `--synthesis_template` | **[必需]** 定义最终Oligo结构的文本模板文件。| `--synthesis_template oligo_template.txt`|
-| `--genome_type` | 指定基因组类型，`circle`为环状，`linear`为线性。| `--genome_type circle` |
-| `--pam` | PAM序列，N代表任意碱基。 | `--pam NGG` (默认) |
-| `--HR_len` | 同源臂长度。格式为'首选:最小'或单个数字。 | `--HR_len 50:40` (默认) |
-| `--sgRNA_num` | 为每个基因生成的设计方案数量。 | `--sgRNA_num 2` |
-| `--restriction_site` | 需要在可变区中避免的一个或多个酶切位点。 | `--restriction_site gaagac ggtctc` |
-| `--cloning_site` | 一个特殊的酶切位点，通常用于后续克隆，它在最终检查中被豁免。| `--cloning_site AAGGTCTCA` |
+### Mode-Specific Parameters and Examples
 
-### 设计模式详解与示例
+#### 1. Knockout_Cas9
+Designs small deletions within gene coding regions.
 
-#### 1. 基因敲除 (`knockout`)
+**Parameters**:
+- `--pam`: PAM sequence (default: `NGG`).
+- `--HR_len`: Homology arm length range (`preferred:min`, default: `50:40`).
+- `--del_length`: Deletion length range (`min:max`, default: `50:100`).
+- `--promoter_region`: Protected promoter region size (`min:max`, default: `50:150`).
+- `--ko_search_range`: CDS percentage range for sgRNA search (`min:max`, default: `5:80`).
 
-此模式用于设计在每个基因编码区内部产生小片段删除的文库。
-
-**特有参数**:
-- `--del_length`: 删除片段的长度范围，格式为 '最小:最大'。 (默认: `50:100`)
-- `--promoter_region`: 定义启动子保护区的大小，避免删除。 (默认: `50:150`)
-- `--ko_search_range`: 在CDS中搜索sgRNA的百分比范围。 (默认: `5:80`)
-
-**示例命令**:
+**Example**:
 ```bash
-python Bact-CRISPR-Library knockout \
+python bact_crispr_library.py Knockout_Cas9 \
   --input_fna ecoli.fna \
   --input_gff ecoli.gff \
-  --output ecoli_knockout_lib.csv \
+  --output ecoli_knockout.csv \
   --genome_type circle \
   --pam NGG \
   --HR_len 46:40 \
   --del_length 20:100 \
+  --promoter_region 50:150 \
+  --ko_search_range 5:80 \
   --sgRNA_num 2 \
   --restriction_site gaagac ggtctc \
   --cloning_site AAGGTGAGACCAAGGTCTCTCGAC \
   --synthesis_template knockout_template.txt
 ```
 
-#### 2. 启动子替换 (`promoter_replace`)
+#### 2. PromoterChange_Cas9
+Replaces promoters upstream of gene start codons.
 
-此模式用于在每个基因的起始密码子上游替换天然启动子。最终合成的Oligo将包含一个克隆位点，用于后续插入具体的启动子序列。
+**Parameters**:
+- `--pam`: PAM sequence (default: `NGG`).
+- `--HR_len`: Homology arm length range (`preferred:min`, default: `50:40`).
+- `--promoter_search_size`: Upstream region size for sgRNA search (default: 150 bp).
 
-**特有参数**:
-- `--promoter_search_size`: 在起始密码子（ATG）上游搜索sgRNA的区域大小(bp)。 (默认: `150`)
-
-**示例命令**:
+**Example**:
 ```bash
-python Bact-CRISPR-Library promoter_replace \
+python bact_crispr_library.py PromoterChange_Cas9 \
   --input_fna ecoli.fna \
   --input_gff ecoli.gff \
-  --output ecoli_promoter_lib.csv \
+  --output ecoli_promoter.csv \
   --genome_type circle \
+  --pam NGG \
   --HR_len 50:45 \
+  --promoter_search_size 150 \
   --restriction_site gaagac \
   --cloning_site GGTCTCAAGCTT \
   --synthesis_template promoter_template.txt
 ```
 
-#### 3. C端融合 (`C_fusion`)
+#### 3. Cfusion_Cas9
+Inserts tags (e.g., fluorescent proteins) at protein C-termini.
 
-此模式用于在每个蛋白的C末端（终止密码子处）插入一个标签序列（如荧光蛋白、降解决定子等）。
+**Parameters**:
+- `--pam`: PAM sequence (default: `NGG`).
+- `--HR_len`: Homology arm length range (`preferred:min`, default: `50:40`).
+- `--sgrna_search_range`: Search range around stop codon (default: 50 bp).
 
-**特有参数**:
-- `--insert_sequence`: **[必需]** 要插入的序列（例如，Linker-mCherry），必须包含终止密码子。
-- `--insert_name`: **[必需]** 插入序列的名称，将记录在输出文件中。
-- `--sgrna_search_range`: 在终止密码子周围搜索sgRNA的范围(bp)。 (默认: `50`)
-
-**示例命令**:
+**Example**:
 ```bash
-python Bact-CRISPR-Library C_fusion \
+python bact_crispr_library.py Cfusion_Cas9 \
   --input_fna ecoli.fna \
   --input_gff ecoli.gff \
-  --output ecoli_Cfusion_lib.csv \
+  --output ecoli_cfusion.csv \
   --genome_type circle \
-  --insert_sequence "GGAGGCGGATCGTAGTAGTAA" \
-  --insert_name "Linker-3xFLAG" \
+  --pam NGG \
+  --HR_len 50:45 \
   --sgrna_search_range 40 \
   --restriction_site gaagac \
   --cloning_site GGTCTC \
-  --synthesis_template C_fusion_template.txt
+  --synthesis_template cfusion_template.txt
 ```
 
-## 📄 输入文件格式
+#### 4. Knockdown_Cas9
+Inserts regulatory elements for gene knockdown.
 
-#### 1. 基因组序列 (`--input_fna`)
-标准的FASTA格式文件。对于环状基因组，文件内容仍是线性的，程序会通过`--genome_type circle`参数来正确处理。
+**Parameters**:
+- `--pam`: PAM sequence (default: `NGG`).
+- `--HR_len`: Homology arm length range (`preferred:min`, default: `50:40`).
+- `--insertion_distance`: Distance range upstream of start codon (`min:max`, default: `20:30`).
+- `--sgrna_search_range`: Search range around insertion site (default: 50 bp).
 
-#### 2. 基因注释 (`--input_gff`)
-标准的GFF3格式。文件中必须包含`gene`和`CDS`类型的特征（feature），并且`gene`特征需要有`locus_tag`属性作为基因的唯一标识符。
+**Example**:
+```bash
+python bact_crispr_library.py Knockdown_Cas9 \
+  --input_fna ecoli.fna \
+  --input_gff ecoli.gff \
+  --output ecoli_knockdown.csv \
+  --genome_type circle \
+  --pam NGG \
+  --HR_len 50:45 \
+  --insertion_distance 20:30 \
+  --sgrna_search_range 50 \
+  --restriction_site gaagac \
+  --cloning_site GGTCTC \
+  --synthesis_template knockdown_template.txt
+```
 
-#### 3. Oligo合成模板 (`--synthesis_template`)
-一个纯文本文件，定义了最终输出的Oligo的结构。文件中可以使用以下占位符，程序会自动替换它们：
+#### 5. Knockout_CASTs
+Designs knockouts for INTEGRATE/CASTs systems.
 
-- `{sgRNA_fwd}`: sgRNA序列 (20nt)
-- `{sgRNA_rc}`: sgRNA的反向互补序列
-- `{upstream_arm}`: 上游同源臂
-- `{downstream_arm}`: 下游同源臂
-- `{barcode}`: 随机生成的条形码
-- `{exempt_restriction_site}`: 用于后续克隆的酶切位点（由`--cloning_site`参数指定）
-- `{insert}`: 要插入的序列 (仅用于`C_fusion`模式)
+**Parameters**:
+- `--target_cds_range`: CDS percentage range for sgRNA search (`min:max`, default: `5:80`).
 
-**模板示例 (`promoter_template.txt`)**:
+**Example**:
+```bash
+python bact_crispr_library.py Knockout_CASTs \
+  --input_fna ecoli.fna \
+  --input_gff ecoli.gff \
+  --output ecoli_casts_knockout.csv \
+  --genome_type circle \
+  --target_cds_range 5:80 \
+  --restriction_site gaagac \
+  --cloning_site GGTCTC \
+  --synthesis_template casts_knockout_template.txt
+```
+
+#### 6. PromoterChange_CASTs
+Designs promoter insertions for INTEGRATE/CASTs systems.
+
+**Parameters**:
+- `--insertion_range_promoter`: Distance range upstream of start codon (`min:max`, default: `25:50`).
+- `--sgrna_search_window`: Search window around ideal target (default: 20 bp).
+
+**Example**:
+```bash
+python bact_crispr_library.py PromoterChange_CASTs \
+  --input_fna ecoli.fna \
+  --input_gff ecoli.gff \
+  --output ecoli_casts_promoter.csv \
+  --genome_type circle \
+  --insertion_range_promoter 25:50 \
+  --sgrna_search_window 20 \
+  --restriction_site gaagac \
+  --cloning_site GGTCTC \
+  --synthesis_template casts_promoter_template.txt
+```
+
+## 📄 Input File Formats
+
+### 1. Genome Sequence (`--input_fna`)
+Standard FASTA format. For circular genomes, provide a linear sequence, and the tool handles circularity via `--genome_type circle`.
+
+### 2. Gene Annotation (`--input_gff`)
+Standard GFF3 format with `gene` and `CDS` features. Each `gene` must have a `locus_tag` attribute as a unique identifier.
+
+### 3. Synthesis Template (`--synthesis_template`)
+A text file defining the oligonucleotide structure with placeholders:
+- `{sgRNA_fwd}`: sgRNA sequence (20 nt for Cas9, 32 nt for CASTs).
+- `{sgRNA_rc}`: Reverse complement of sgRNA.
+- `{pam}`: PAM sequence.
+- `{pam_rc}`: Reverse complement of PAM.
+- `{upstream_arm}`: Upstream homology arm.
+- `{downstream_arm}`: Downstream homology arm.
+- `{barcode}`: Randomly generated barcode.
+- `{exempt_restriction_site}`: Cloning site specified by `--cloning_site`.
+- `{insert}`: Insertion sequence (used in Cfusion_Cas9).
+
+**Example Template** (`promoter_template.txt`):
 ```
 GACGACTTGCTATTTCTAGCTCTAAAAC{sgRNA_fwd}GTTAAACCCTATAGTGAGTCGTATTAC{barcode}AGGTGAGACC{exempt_restriction_site}GAC{upstream_arm}{downstream_arm}ACTCGCACTGCTGGTCACTTGGTCTGGA
 ```
 
-## 📤 输出文件格式
+## 📤 Output File Formats
 
-程序会生成两个CSV文件：
+### 1. Main Output (`<output>.csv`)
+Contains successful designs with columns:
+- `Gene_ID`: Gene locus_tag.
+- `Status`: Design status ("Success").
+- `sgRNA_Sequence`: Designed sgRNA sequence.
+- `Barcode`: Generated barcode.
+- `Final_Oligo_for_Synthesis`: Complete oligonucleotide for synthesis.
+- `sgRNA_Score`: sgRNA activity score (Cas9 modes).
+- `Arm_Length`: Homology arm length (Cas9 modes).
+- `Upstream_Arm`, `Downstream_Arm`: Homology arm sequences (Cas9 modes).
+- `sgRNA_PAM`: PAM sequence.
+- `sgRNA_Strand`: sgRNA strand (forward/reverse).
+- `sgRNA_Cut_Site`: Genomic cut site (Cas9 modes).
+- `Design_Scenario`: Design strategy details (PromoterChange_Cas9, Knockdown_Cas9).
+- `Deletion_Length`, `Deletion_Start`, `Deletion_End`: Deletion details (Knockout_Cas9).
+- `Design_Strategy`, `Target_Site`, `Predicted_Insertion_Site`: CASTs-specific fields.
 
-1.  **`<output_name>.csv`**: 包含所有成功设计的结果。关键列包括：
-    - `Gene_ID`: 目标基因的locus_tag。
-    - `Status`: 设计状态 ("Success")。
-    - `sgRNA_Sequence`: 设计的sgRNA序列。
-    - `Barcode`: 生成的条形码。
-    - `Final_Oligo_for_Synthesis`: 最终用于合成的完整Oligo序列。
-    - `Arm_Length`: 同源臂长度。
-    - `Upstream_Arm`, `Downstream_Arm`: 同源臂序列。
-    - `Design_Scenario`: （仅promoter_replace模式）显示采用的设计策略和参数。
-    - ... 以及其他详细信息。
+### 2. Failed Genes (`<output>_failed.csv`)
+Lists genes that failed design with `Gene_ID` and `Status` ("Failed").
 
-2.  **`<output_name>_failed.csv`**: 包含所有设计失败的基因ID列表。
+## 📜 License
 
-## 📜 许可
+This project is licensed under the [MIT License](LICENSE).
 
-本项目采用 [MIT License](LICENSE)。
+## 📧 Contact
 
-## 📧 联系方式
+- **Author**: Zhaohui Cai
+- **Email**: cai_zhaohui@163.com
+- **GitHub Issues**: Open an issue for questions or support.
 
-- **作者**: [Zhaohui Cai]
-- **邮箱**: [cai_zhaohui@163.com]
+## 🛠️ Contributing
+
+Contributions are welcome! To contribute:
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/your-feature`).
+3. Commit changes (`git commit -m 'Add your feature'`).
+4. Push to the branch (`git push origin feature/your-feature`).
+5. Open a pull request.
