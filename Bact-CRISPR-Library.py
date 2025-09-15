@@ -49,6 +49,7 @@ class DesignConfig:
     promoter_search_size: int
     sgrna_num: int
     barcode_len: int
+    relax: bool # --- CHANGE: Added relax parameter ---
     synthesis_template: Optional[str] = None
     cloning_site: Optional[str] = None
     min_del: Optional[int] = None
@@ -492,7 +493,8 @@ class CRISPRDesigner:
                         if lha_end >= rha_start: continue
                         deletion_start, deletion_end = lha_end, rha_start
                         is_safe = True
-                        if upstream_gene_protected_cds:
+                        # --- CHANGE: Added relax check ---
+                        if upstream_gene_protected_cds and not self.config.relax:
                             protected_start, protected_end = upstream_gene_protected_cds
                             if max(deletion_start, protected_start) < min(deletion_end, protected_end): is_safe = False
                         if not is_safe: continue
@@ -553,7 +555,8 @@ class CRISPRDesigner:
         for dist in range(dist_max, dist_min - 1, -1):
             insertion_site = gene.cds_5prime_start - dist
             is_safe = True
-            if upstream_gene_protected_cds:
+            # --- CHANGE: Added relax check ---
+            if upstream_gene_protected_cds and not self.config.relax:
                 protected_start, protected_end = upstream_gene_protected_cds
                 if protected_start <= insertion_site < protected_end: is_safe = False
             if not is_safe: continue
@@ -604,7 +607,8 @@ class CRISPRDesigner:
                         down_arm_start, down_arm_end = insertion_site + 3 + offset, insertion_site + 3 + offset + arm_len
                         deletion_start, deletion_end = up_arm_end, down_arm_start
                         is_safe = True
-                        if downstream_gene_protected_cds:
+                        # --- CHANGE: Added relax check ---
+                        if downstream_gene_protected_cds and not self.config.relax:
                             protected_start, protected_end = downstream_gene_protected_cds
                             if max(deletion_start, protected_start) < min(deletion_end, protected_end): is_safe = False
                         if not is_safe: continue
@@ -720,7 +724,8 @@ class CRISPRDesigner:
             target_insertion_site = gene.cds_5prime_start - dist
             
             is_safe = True
-            if upstream_gene_protected_cds:
+            # --- CHANGE: Added relax check ---
+            if upstream_gene_protected_cds and not self.config.relax:
                 protected_start, protected_end = upstream_gene_protected_cds
                 if protected_start <= target_insertion_site < protected_end:
                     is_safe = False
@@ -868,6 +873,8 @@ def main():
     base_parser.add_argument("--genome_type", type=str, default="linear", choices=['linear', 'circle'], help="指定基因组类型 (默认: linear)。")
     base_parser.add_argument("--sgRNA_num", type=int, default=1, help="为每个基因生成的设计方案数量 (默认: 1)。")
     base_parser.add_argument("--barcode_len", type=int, default=8, help="指定生成条形码(barcode)的长度 (默认: 8)。")
+    # --- CHANGE: Added relax parameter ---
+    base_parser.add_argument("--relax", action="store_true", help="不考虑设计是否会破坏相邻基因的CDS。")
     
     oligo_synthesis_parser = argparse.ArgumentParser(add_help=False)
     oligo_synthesis_parser.add_argument("--restriction_site", type=str, nargs='+', help="在可变区中需要避免的限制性酶切位点。")
@@ -939,7 +946,8 @@ def main():
             synthesis_template=synthesis_template_content,
             cloning_site=getattr(args, 'cloning_site', None),
             sgrna_num=args.sgRNA_num,
-            barcode_len=args.barcode_len
+            barcode_len=args.barcode_len,
+            relax=args.relax # --- CHANGE: Pass relax parameter to config ---
         )
         
         if args.mode == 'Knockout_Cas9':
