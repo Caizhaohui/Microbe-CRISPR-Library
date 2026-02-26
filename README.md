@@ -44,7 +44,77 @@ These apply across all modes:
 
 ---
 
-**Note**: This toolkit has been optimized for fungal species with specialized implementations for efficient knockout library design.
+## Fungal Knockout Designer (V2 & V3) - Specialized Implementation
+
+This repository provides optimized V2 and V3 implementations of the Cas9-based knockout designer with enhanced performance and synthesis constraints, specifically tailored for fungal genome applications.
+
+### V2 (Production-Ready)
+**File**: `Cas9_knockout_designer_v2.py`
+
+Features:
+- **Multi-contig genome support**: Handles genomes split across multiple contigs
+- **GBFF input mode**: Load genome features directly from GenBank format files
+- **Multi-guide design**: Generate 2 independent gRNAs per gene with automated fallback
+- **Performance optimized**: PAM search via string matching, reverse complement via string translation
+- **Flexible parameters**: 
+  - `--HR_len` (preferred:minimum homology arm lengths, e.g., `75:65`)
+  - `--del_length` (deletion size range, e.g., `100:220`)
+  - `--barcode_len` (barcode length, default 8)
+  - `--synthesis_template` (custom oligo template)
+
+**Usage**:
+```bash
+python Cas9_knockout_designer_v2.py \
+  --input_gbff genome.gbff \
+  --output knockout_library.csv \
+  --synthesis_template knockout_library_oligo_template.txt \
+  --species fungal_species \
+  --HR_len 75:65 \
+  --del_length 100:220 \
+  --barcode_len 10
+```
+
+### V3 (Oligo Length Constraint)
+**File**: `Cas9_knockout_designer_v3.py`
+
+All V2 features, plus:
+- **Exact oligo length targeting**: All synthesized oligos are exactly `--max_oligo_length` bp (default 300bp)
+- **Variable homology arms**: Arm lengths automatically adjusted and maximized within oligo budget
+- **Commercial synthesis optimization**: Designed for fixed-length oligo library synthesis
+
+**Usage**:
+```bash
+python Cas9_knockout_designer_v3.py \
+  --input_gbff genome.gbff \
+  --output knockout_library_300bp.csv \
+  --synthesis_template knockout_library_oligo_template.txt \
+  --species fungal_species \
+  --HR_len 75:65 \
+  --del_length 100:220 \
+  --barcode_len 10 \
+  --max_oligo_length 300
+```
+
+### Output Format
+
+CSV file with columns:
+- `Gene Id`: Target gene identifier
+- `Gene Name`: Target gene name
+- `sgRNA sequence`: 20bp guide RNA sequence
+- `Upstream Arm Length`, `Downstream Arm Length`: Final arm lengths
+- `Final Oligo For Synthesis`: Complete synthesis oligo
+- `Barcode`: Unique barcode sequence
+- Other metadata (deletion boundaries, etc.)
+
+### V2 vs V3 Comparison
+
+| Aspect | V2 | V3 |
+|--------|----|----|
+| **Oligo Length** | Variable (≤template) | Exactly `max_oligo_length` bp |
+| **Arm Lengths** | Fixed preferred/min search | Dynamic, maximized within budget |
+| **Use Case** | General knockout library | Commercial synthesis (fixed-length pools) |
+| **Speed** | Scales with genome size | Scales with genome size |
+| **Coverage** | 2 designs per gene | 2 designs per gene |
 
 ---
 
