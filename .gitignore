@@ -1,0 +1,9 @@
+# 忽略所有文件
+*
+
+# 保留Python源代码
+!Cas9_knockout_designer_v2.py
+!Cas9_knockout_designer_v3.py
+!README.md
+!.gitignore
+!
