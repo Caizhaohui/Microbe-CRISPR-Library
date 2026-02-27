@@ -118,6 +118,34 @@ CSV file with columns:
 
 ---
 
+## Fungal Knockout Designer (V4–V6) - Current Workflow
+
+V6 is the maintained version for fungal knockout library design in this workspace.
+
+**File**: `Cas9_knockout_designer_v6.py`
+
+Key improvements since V3:
+- **Deletion length by CDS percent and/or bp**: `--del_length_per` and `--del_length_bp` (supports single value as max).
+- **Start-codon-aware scoring**: prioritizes deletions that remove the start codon and cause frameshift.
+- **Barcode GC range**: widened to 30%-80% by default.
+- **Exact oligo length**: set `--max_oligo_length 300` to keep all oligos fixed-length.
+
+**Example (V6)**:
+```bash
+python Cas9_knockout_designer_v6.py \
+  --input_gbff Mt_genomic.gbff \
+  --output Mt_KO_library_v6_delPct10_80_delBp300_1000_bc11.csv \
+  --synthesis_template Mt_knockout_library_oligo_template.txt \
+  --species M_thermophila \
+  --barcode_len 11 \
+  --del_length_per 10%:80% \
+  --del_length_bp 300:1000 \
+  --max_oligo_length 300 \
+  --restriction_site GGTCTC GAAGAC
+```
+
+---
+
 The Bact-CRISPR-Library toolkit represents a significant advancement in computational support for bacterial CRISPR engineering, bridging traditional Cas9 methodologies with emerging CASTs technologies. Developed to address the need for scalable, customizable library designs, it integrates genome processing, sgRNA optimization, and oligo synthesis into a unified framework. This comprehensive guide expands on the toolkit's architecture, implementation details, mode-specific workflows, potential extensions, and practical considerations for researchers in synthetic biology and microbiology.
 
 ## Architectural Design
