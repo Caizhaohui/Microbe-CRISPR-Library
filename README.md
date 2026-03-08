@@ -1,263 +1,211 @@
-# Bact-CRISPR-Library Toolkit Overview
+# Cas9_knockout_designer_v9 使用说明
 
-The Bact-CRISPR-Library is a versatile Python-based toolkit tailored for designing CRISPR-based gene editing libraries in bacteria, such as *Escherichia coli* and *Streptomyces*. It supports both Cas9-mediated precise editing and CASTs (CRISPR-associated transposase) systems for transposon-based insertions. The central script serves as a dispatcher, invoking specialized sub-scripts for various modes while preserving modularity.
+本说明文档对应脚本：
 
-This toolkit streamlines the process of generating sgRNA libraries for applications like gene knockdown, promoter replacement, C-terminal fusions, and knockouts. Designs are customizable, with outputs in CSV format for easy integration into downstream workflows. While effective for bacterial genomes, all designs should undergo experimental validation to account for off-target effects or strain-specific variations.
+- `Cas9_knockout_designer_v9.py`
 
-### Key Features
-- **Modular Architecture**: A single entry-point script dispatches tasks to independent sub-scripts.
-- **Dual Systems Support**: Cas9 for homology-directed repair and CASTs for efficient insertions.
-- **Input Handling**: Processes FASTA genomes (linear/circular) and GFF3 annotations.
-- **Output Formats**: CSV files detailing successful designs and failures, including sgRNAs, barcodes, and synthesized oligos.
-- **Customization Options**: Adjustable parameters for sgRNA count, barcode length, restriction site avoidance, and mode-specific constraints.
+该版本在 `v8` 基础上增加了前置策略路由参数 `--dele_model`，用于在同一套命令行入口下切换两类删除策略：
 
-### Installation Guide
-Clone the repository and install dependencies using pip:
-```
+- `Mt`：针对 *M. thermophila* 的定向删除策略（按 PAM 方向定义 cut window）
+- `normal`：通用删除策略（V7 风格，走 `legacy_length`）
+
+---
+
+## 1. 运行环境
+
+建议环境：
+
+- Python 3.8 及以上
+- 依赖库：
+  - `pandas`
+  - `biopython`
+  - `gffutils`
+
+安装示例：
+
+```bash
 pip install pandas biopython gffutils
 ```
-Ensure Python 3.8+ is installed. No additional tools are required beyond these libraries.
-
-### Quick Usage Examples
-Run the toolkit with a mode and required inputs:
-```
-python Bact-CRISPR-Library.py Knockdown_Cas9 --input_fna ecoli.fna --input_gff ecoli.gff --output knockdown_results.csv --synthesis_template template.txt --sgRNA_num 2
-```
-For CASTs-based knockout:
-```
-python Bact-CRISPR-Library.py Knockout_CASTs --input_fna strepto.fna --input_gff strepto.gff --output casts_ko.csv --synthesis_template template.txt --target_cds_range 10:70
-```
-View general help: `python Bact-CRISPR-Library.py -h`. Mode-specific help: `python Bact-CRISPR-Library.py PromoterChange_Cas9 -h`.
-
-### Common Parameters
-These apply across all modes:
-- `--input_fna`: Genome FASTA file (required).
-- `--input_gff`: GFF3 annotation file (required).
-- `--output`: Path for CSV output (required).
-- `--genome_type`: 'linear' or 'circle' (default: linear).
-- `--sgRNA_num`: Number of designs per gene (default: 1).
-- `--barcode_len`: Barcode sequence length (default: 10).
-- `--restriction_site`: Space-separated sites to avoid.
-- `--synthesis_template`: Oligo structure template file (required).
-- `--cloning_site`: Exempt restriction site.
-- `--relax`: Bypass checks for adjacent gene disruptions (where supported).
 
 ---
 
-## Fungal Knockout Designer (V2 & V3) - Specialized Implementation
+## 2. 核心新增参数：`--dele_model`
 
-This repository provides optimized V2 and V3 implementations of the Cas9-based knockout designer with enhanced performance and synthesis constraints, specifically tailored for fungal genome applications.
+### 2.1 参数定义
 
-### V2 (Production-Ready)
-**File**: `Cas9_knockout_designer_v2.py`
-
-Features:
-- **Multi-contig genome support**: Handles genomes split across multiple contigs
-- **GBFF input mode**: Load genome features directly from GenBank format files
-- **Multi-guide design**: Generate 2 independent gRNAs per gene with automated fallback
-- **Performance optimized**: PAM search via string matching, reverse complement via string translation
-- **Flexible parameters**: 
-  - `--HR_len` (preferred:minimum homology arm lengths, e.g., `75:65`)
-  - `--del_length` (deletion size range, e.g., `100:220`)
-  - `--barcode_len` (barcode length, default 8)
-  - `--synthesis_template` (custom oligo template)
-
-**Usage**:
-```bash
-python Cas9_knockout_designer_v2.py \
-  --input_gbff genome.gbff \
-  --output knockout_library.csv \
-  --synthesis_template knockout_library_oligo_template.txt \
-  --species fungal_species \
-  --HR_len 75:65 \
-  --del_length 100:220 \
-  --barcode_len 10
+```text
+--dele_model {normal, Mt}
 ```
 
-### V3 (Oligo Length Constraint)
-**File**: `Cas9_knockout_designer_v3.py`
+- 默认值：`normal`
+- 含义：
+  - `Mt`：强制使用 Mt 删除策略（`cut_window`）
+  - `normal`：强制使用通用删除策略（`legacy_length`）
 
-All V2 features, plus:
-- **Exact oligo length targeting**: All synthesized oligos are exactly `--max_oligo_length` bp (default 300bp)
-- **Variable homology arms**: Arm lengths automatically adjusted and maximized within oligo budget
-- **Commercial synthesis optimization**: Designed for fixed-length oligo library synthesis
+### 2.2 启动审计日志
 
-**Usage**:
-```bash
-python Cas9_knockout_designer_v3.py \
-  --input_gbff genome.gbff \
-  --output knockout_library_300bp.csv \
-  --synthesis_template knockout_library_oligo_template.txt \
-  --species fungal_species \
-  --HR_len 75:65 \
-  --del_length 100:220 \
-  --barcode_len 10 \
-  --max_oligo_length 300
-```
+脚本启动后会明确打印当前策略，便于批量任务审计：
 
-### Output Format
-
-CSV file with columns:
-- `Gene Id`: Target gene identifier
-- `Gene Name`: Target gene name
-- `sgRNA sequence`: 20bp guide RNA sequence
-- `Upstream Arm Length`, `Downstream Arm Length`: Final arm lengths
-- `Final Oligo For Synthesis`: Complete synthesis oligo
-- `Barcode`: Unique barcode sequence
-- Other metadata (deletion boundaries, etc.)
-
-### V2 vs V3 Comparison
-
-| Aspect | V2 | V3 |
-|--------|----|----|
-| **Oligo Length** | Variable (≤template) | Exactly `max_oligo_length` bp |
-| **Arm Lengths** | Fixed preferred/min search | Dynamic, maximized within budget |
-| **Use Case** | General knockout library | Commercial synthesis (fixed-length pools) |
-| **Speed** | Scales with genome size | Scales with genome size |
-| **Coverage** | 2 designs per gene | 2 designs per gene |
+- `[V9审计] 当前采用 Mt 删除策略`
+- `[V9审计] 当前采用 normal 删除策略`
 
 ---
 
-## Fungal Knockout Designer (V4–V6) - Current Workflow
+## 3. 两种删除策略的差异
 
-V6 is the maintained version for fungal knockout library design in this workspace.
+## 3.1 `--dele_model Mt`
 
-**File**: `Cas9_knockout_designer_v6.py`
+- 内部自动注入：
+  - `--deletion_mode cut_window`
+- 删除窗口按 PAM 方向定义：
+  - 上游 `cut_window_upstream`（默认 20 bp）
+  - 下游 `cut_window_downstream`（默认 100 bp）
+- 删除长度优先选择窗口内最大可用且非 3 倍数（优先 frameshift）
 
-Key improvements since V3:
-- **Deletion length by CDS percent and/or bp**: `--del_length_per` and `--del_length_bp` (supports single value as max).
-- **Start-codon-aware scoring**: prioritizes deletions that remove the start codon and cause frameshift.
-- **Barcode GC range**: widened to 30%-80% by default.
-- **Exact oligo length**: set `--max_oligo_length 300` to keep all oligos fixed-length.
+适用场景：
 
-**Example (V6)**:
+- 明确采用 Mt 经验窗口（切点上游 20 / 下游 100）
+- 需要与 V9 Mt 优化实验策略对齐
+
+## 3.2 `--dele_model normal`
+
+- 内部自动注入：
+  - `--deletion_mode legacy_length`
+- 删除长度遵循 V7/V8 legacy 逻辑：
+  - 通过 `--del_length_per` / `--del_length_bp` 控制长度约束
+
+适用场景：
+
+- 非 Mt 物种或希望保持跨物种通用参数化长度约束
+
+---
+
+## 4. 输入模式
+
+脚本继承 v8 的输入方式，支持：
+
+- FASTA + GFF3：
+  - `--input_fna`
+  - `--input_gff`
+- GBFF：
+  - `--input_gbff`
+
+二选一模式，不可混用。
+
+---
+
+## 5. 常用参数速查
+
+- 基础参数：
+  - `--output`：输出 CSV 路径
+  - `--species`：物种名称（默认 `M_thermophila`）
+  - `--synthesis_template`：合成模板文件（必填）
+  - `--sgRNA_num`：每基因目标设计数（默认 2）
+  - `--barcode_len`：条形码长度
+  - `--restriction_site`：需规避的酶切位点列表
+  - `--max_oligo_length`：目标 oligo 长度（固定长度设计）
+  - `--num_workers`：并行线程数
+
+- 与删除策略相关：
+  - `--dele_model {normal, Mt}`
+  - `--cut_window`：仅 Mt/cut_window 模式使用，例如 `20:100`
+  - `--del_length_per`：仅 normal/legacy 模式常用，例如 `10%:80%`
+  - `--del_length_bp`：仅 normal/legacy 模式常用，例如 `300:1000`
+
+---
+
+## 6. 命令示例
+
+## 6.1 Mt 策略（推荐用于 Mt 数据）
+
 ```bash
-python Cas9_knockout_designer_v6.py \
+python Cas9_knockout_designer_v9.py \
+  --dele_model Mt \
   --input_gbff Mt_genomic.gbff \
-  --output Mt_KO_library_v6_delPct10_80_delBp300_1000_bc11.csv \
+  --output Mt_V9_Mt_KO.csv \
   --synthesis_template Mt_knockout_library_oligo_template.txt \
   --species M_thermophila \
   --barcode_len 11 \
-  --del_length_per 10%:80% \
-  --del_length_bp 300:1000 \
   --max_oligo_length 300 \
   --restriction_site GGTCTC GAAGAC
 ```
 
----
+## 6.2 normal 策略（通用 V7 风格）
 
-## Fungal Knockout Designer (V7 Optimized) - High-Performance Variant
-
-V7 is an optimized variant of V6 that applies three-layer performance optimization strategies without sacrificing core functionality.
-
-**File**: `Cas9_knockout_designer_v7_optimized.py`
-
-**Performance Improvements**:
-- **方案A（智能候选生成）**: Replace exhaustive deletion length enumeration (700-1000 iterations) with Top-5 candidate strategy. Eliminates 97% of redundant iterations.
-- **方案B（删除范围预筛选）**: Pre-compute physical valid range for deletion windows based on cut_site position. Eliminates impossible deletion lengths before iteration.
-- **方案C（多线程并行）**: Gene-level parallelization using ThreadPoolExecutor. Distribute independent gene designs across CPU cores (default 8).
-
-**Expected Performance**:
-- V6: ~40-50 seconds for 9,097 genes
-- V7: ~10-15 seconds for 9,097 genes using 8 threads
-- **Overall speedup**: 3-5x faster (or 10-15x faster per sgRNA with single-threaded baseline)
-
-**Design Accuracy**:
-- V7 achieves 96.9% coverage of V6 designs on standard parameters
-- Top-5 candidate strategy covers 95%+ of optimal deletion solutions
-- ~3% reduction in designed genes due to stricter filtering; remaining designs are higher-confidence
-
-**Usage (V7 with 8 threads)**:
 ```bash
-python Cas9_knockout_designer_v7_optimized.py \
+python Cas9_knockout_designer_v9.py \
+  --dele_model normal \
   --input_gbff Mt_genomic.gbff \
-  --output Mt_KO_library_v7_delPct10_80_delBp300_1000_bc11.csv \
+  --output Mt_V9_normal_KO.csv \
   --synthesis_template Mt_knockout_library_oligo_template.txt \
   --species M_thermophila \
   --barcode_len 11 \
-  --del_length_per 10%:80% \
-  --del_length_bp 300:1000 \
   --max_oligo_length 300 \
   --restriction_site GGTCTC GAAGAC \
-  --num_workers 8
+  --del_length_per 10%:80% \
+  --del_length_bp 300:1000
 ```
-
-**Benchmark Results** (Mt_thermophila, 9,097 genes):
-
-| Metric | V6 | V7 (8 threads) |
-|--------|-------|-----------------|
-| Successful designs | 18,133 | 17,570 |
-| Failed genes | 33 | 295 |
-| Partial genes | 0 | 34 |
-| Frameshift rate | 99.7% | 86.1% |
-| Avg deletion length | 640.9 bp | 719.9 bp |
-| **Runtime** | **40-50s** | **10-15s** |
-| **Speedup** | 1x | **3-5x** |
-
-**V6 vs V7 Trade-offs**:
-- Choose **V6** for maximum coverage (99.7% frameshift) and exhaustive search quality
-- Choose **V7** for fast iteration & prototyping, especially on large genomes (>10,000 genes)
 
 ---
 
-The Bact-CRISPR-Library toolkit represents a significant advancement in computational support for bacterial CRISPR engineering, bridging traditional Cas9 methodologies with emerging CASTs technologies. Developed to address the need for scalable, customizable library designs, it integrates genome processing, sgRNA optimization, and oligo synthesis into a unified framework. This comprehensive guide expands on the toolkit's architecture, implementation details, mode-specific workflows, potential extensions, and practical considerations for researchers in synthetic biology and microbiology.
+## 7. 输出文件说明
 
-## Architectural Design
-At its core, the toolkit employs a dispatcher pattern implemented in `Bact-CRISPR-Library.py`. This script uses Python's `argparse` library with subparsers to handle mode-specific commands, ensuring a clean CLI interface. Upon invocation, it constructs a command list via the `build_cmd` function and executes the appropriate sub-script using `subprocess.run`. This approach decouples the user interface from core logic, allowing independent maintenance of sub-scripts.
+运行成功后会输出两类文件：
 
-Sub-scripts share common utilities:
-- **GenomeProcessor**: Loads FASTA sequences and parses GFF3 files using Biopython and gffutils, extracting gene features like locus tags, strands, and CDS coordinates.
-- **SequenceUtils**: Handles reverse complements, sequence extraction (supporting circular genomes), restriction site checks, and unique barcode generation with GC content and homopolymer filters.
-- **SGRNADesigner**: Searches for sgRNAs with mode-specific PAM patterns, avoiding restriction sites.
-- **CRISPRDesigner**: Core design logic, including arm searches, oligo assembly, and gene-specific validations.
-- **ResultProcessor**: Generates CSV outputs for successes and failures, with detailed columns like Gene_ID, sgRNA_Sequence, and Final_Oligo_for_Synthesis.
+- 主结果文件：`<output>.csv`
+  - 成功设计条目
+- 失败汇总文件：`<output>_failed.csv`
+  - `Failed`：0 条设计
+  - `Partial`：设计条数小于 `--sgRNA_num`
 
-For CASTs modes, the multi-purpose `CASTs_designer_v3.py` is invoked with a `--mode` flag (e.g., Knockout_CASTs), adapting PAM searches to CASTs-compatible sequences like AC, GC, CC.
+主结果常见字段：
 
-## Mode-Specific Implementations
-Each mode targets a distinct genetic manipulation strategy, with tailored parameters and filters.
+- `Gene Id`
+- `Status`
+- `Sgrna Seq`
+- `Sgrna Pam`
+- `Sgrna Cut Site`
+- `Deletion Start`
+- `Deletion End`
+- `Deletion Length`
+- `Final Oligo For Synthesis`
 
-### Cas9-Based Modes
-- **Knockdown_Cas9**: Focuses on inserting sgRNAs upstream of start codons to reduce expression. Searches in configurable ranges (--sgrna_upstream_range), ensures minimum distances (--rha_min_dist_to_atg), and uses homology arms (--HR_len). Designs avoid CDS overlaps and restriction sites.
-- **PromoterChange_Cas9**: Replaces promoters by cutting upstream and inserting new sequences. Searches in promoter regions (--promoter_search_size), with optional relaxation (--relax) for adjacent genes. Prioritizes optimal cuts with minimal offsets.
-- **Cfusion_Cas9**: Enables C-terminal fusions by inserting at stop codons. Expands searches downstream (--sgrna_search_range, --max_search_expansion) and protects neighboring genes (--strict). Checks for in-frame stop codons in left homology arms.
-- **Knockout_Cas9**: Induces frameshifts or deletions in CDS. Targets specific percentages (--ko_search_range), controls deletion sizes (--del_length), and safeguards promoters (--promoter_region, --strict).
+---
 
-### CASTs-Based Modes
-- **Knockout_CASTs**: Integrates transposons into CDS for disruption. Targets mid-CDS regions (--target_cds_range) with CASTs-specific PAMs. Designs ensure insertions avoid premature stops and prioritize frameshifts.
-- **PromoterChange_CASTs**: Inserts promoters upstream via transposons. Defines insertion windows (--insertion_range_promoter) and checks for upstream gene collisions unless relaxed (--relax). Predicts insertion sites based on sgRNA orientation.
+## 8. 参数组合建议
 
-All modes incorporate barcode uniqueness, oligo exemption for cloning sites, and logging for progress (e.g., gene processing every 100 entries).
+- 若选择 `--dele_model Mt`：
+  - 优先与 Mt 实验经验窗口一起使用
+  - 通常不再需要 `--del_length_per/--del_length_bp`
 
-## Input and Output Specifications
-### Inputs
-- **FASTA File**: Single contig preferred; uppercased during loading.
-- **GFF3 File**: Must include 'gene' and 'CDS' features with 'locus_tag'. Handles multi-exon genes by aggregating CDS coordinates.
-- **Synthesis Template**: Plain text with placeholders (e.g., {sgRNA_fwd}, {barcode}). Validated for fixed regions against restriction sites.
+- 若选择 `--dele_model normal`：
+  - 建议总是显式提供 `--del_length_per` 或 `--del_length_bp`（或同时提供交集约束）
+  - 对短基因场景可适当放宽 `--del_length_bp` 下限
 
-### Outputs
-- **Success CSV**: Mode-dependent columns, e.g., for Knockdown_Cas9: Gene_ID, Design_Type, sgRNA_Seq, Barcode, Final_Oligo_for_Synthesis.
-- **Failed CSV** (e.g., results_failed.csv): Gene_ID, Status, Strand, Relevant_Sequence (CDS for knockouts, upstream for promoter changes).
-- **Logging**: Console outputs include genome loading stats, gene counts, and summaries (e.g., "Generated X successful designs, Y failed genes").
+---
 
-Failed designs often stem from insufficient sgRNA candidates or restriction site conflicts; relevant sequences aid manual troubleshooting.
+## 9. 常见问题
 
-## Performance and Optimization
-- **Runtime**: Scales with gene count; ~1-5 seconds per gene on standard hardware. For 5,000 genes, expect 1-2 hours total.
-- **Memory**: Low footprint; genome sequences loaded in memory (suitable for bacterial sizes <10 MB).
-- **Optimizations**: Sub-scripts use efficient sliding windows for sgRNA searches and sets for barcode uniqueness. Circular genomes handled via sequence doubling.
-- **Edge Cases**: Handles short genes (skips if below min arm lengths), overlapping genes (via strict mode), and empty inputs (raises errors).
+### Q1：为什么 `normal` 模式报缺少删除长度参数？
 
-## Extensions and Customization
-- **Adding Modes**: Update subparsers, script_map, and sub_mode_map in the dispatcher. Create new sub-scripts following existing patterns.
-- **PAM Customization**: Modify SGRNADesigner in sub-scripts for new patterns.
-- **Multi-Threading**: Not native; parallelize by splitting gene lists externally.
-- **Integration**: Outputs compatible with oligo synthesis pipelines or CRISPR design software like Benchling.
+因为 `normal` 会强制进入 `legacy_length` 逻辑，该模式需要长度约束参数驱动，请补充：
 
-## License
+- `--del_length_per`
+- 或 `--del_length_bp`
 
-[To be determined]
+### Q2：如何确认实际运行的是哪种策略？
 
-## Author
+看启动日志中的审计行：
 
-Caizhaohui
+- `当前采用 Mt 删除策略`
+- `当前采用 normal 删除策略`
+
+---
+
+## 10. 版本说明
+
+`v9` 相对 `v8` 的核心增强：
+
+- 新增前置参数路由 `--dele_model`
+- `Mt` 模式下使用 PAM 方向感知的删除窗口
+- 增加策略审计日志，便于批量任务追踪
