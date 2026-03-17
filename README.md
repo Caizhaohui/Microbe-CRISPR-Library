@@ -43,10 +43,113 @@ The codebase uses a modular, script-per-mode architecture.
 - `Cas9_PromoterChange_designer_v2.py`
 - `Cas9_Cfusion_designer_v1.py`
 - `CASTs_designer_v3.py`
+- `CRISPR_knockin.py`
+  Dual-mode knockin designer (`N_start` and `C_stop`) for start-codon and stop-codon targeted insertion workflows
 
 For fungal knockout library generation, use:
 
 - `Cas9_knockout_designer_v9.py`
+
+---
+
+## CRISPR_knockin.py (Dual-Mode Knockin)
+
+`CRISPR_knockin.py` is derived from the V44 knockin engine and supports two insertion models in one script:
+
+- `--model N_start`
+  - insert payload before the gene start codon
+  - preserves V44 behavior and candidate-selection logic
+- `--model C_stop`
+  - insert payload before the gene stop codon
+  - intended for C-terminal fusion design (tag fusion use case)
+
+### Core design logic
+
+Both modes share the same high-level pipeline:
+
+1. parse CDS features from GBFF
+2. build strand-aware junction-centered sequence context
+3. scan PAMs around `junction ± search_window`
+4. generate candidates by strategy priority
+5. apply arm sanitization and RE filtering
+6. perform mutation-aware HA balancing and oligo assembly
+7. rank and select top designs per gene
+
+#### N_start mode
+
+- Junction: gene start codon boundary
+- LHA: upstream region ending at the start-codon boundary
+- RHA: coding-side region starting from start codon
+- Strategy family:
+  - Priority1 (deletion)
+  - Priority2 (bridge)
+  - Priority3 (RHA mutation)
+
+#### C_stop mode
+
+- Junction: stop codon boundary
+- LHA: coding-tail region ending before stop codon
+- RHA: downstream region after stop codon
+- Strategy family (v1):
+  - `CStop_P1_Del_Downstream`
+  - `CStop_P2_Bridge`
+  - `CStop_P2_Bridge_Mut`
+  - `CStop_P3_Mut_LHA`
+- Additional post-CDS validation:
+  - stop codon must be one of `TAA/TAG/TGA`
+
+### Mutation strategy
+
+Mutation logic is applied to both LHA and RHA in both modes:
+
+- Level 1: silent/synonymous mutation first
+- Level 2: conservative amino-acid-group substitution fallback
+
+This keeps PAM-breaking behavior consistent while minimizing coding impact.
+
+### Determinism and output stability
+
+- `--barcode_seed` controls deterministic barcode generation
+- same inputs + same seed produce reproducible outputs
+
+### Usage examples
+
+#### 1) N_start (V44-equivalent start-codon insertion)
+
+```bash
+python CRISPR_knockin.py \
+  --model N_start \
+  --gbff MG1655_genomic.gbff \
+  --template Knockin_J23100RBS_library_oligo_template.fasta \
+  --output CRISPR_Nstart_v1.csv \
+  --lha_len 70 --rha_len 70 \
+  --barcode_seed 42 \
+  --restriction_site GGTCTC --restriction_site GAAGAC
+```
+
+#### 2) C_stop (C-terminal fusion insertion before stop codon)
+
+```bash
+python CRISPR_knockin.py \
+  --model C_stop \
+  --gbff MG1655_genomic.gbff \
+  --template Cfusion_library_oligo_template.fasta \
+  --output CRISPR_Cstop_v1.csv \
+  --lha_len 70 --rha_len 70 \
+  --barcode_seed 42 \
+  --restriction_site GGTCTC --restriction_site GAAGAC
+```
+
+#### 3) Debug a single gene
+
+```bash
+python CRISPR_knockin.py \
+  --model C_stop \
+  --target_gene b0002 \
+  --gbff MG1655_genomic.gbff \
+  --template Cfusion_library_oligo_template.fasta \
+  --output debug_b0002_cstop.csv
+```
 
 ---
 
