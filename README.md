@@ -1,39 +1,219 @@
 # Microbe-CRISPR-Library
 
-Microbe-CRISPR-Library is a Python toolkit for CRISPR library design across microbial genomes. The current Cas9 knockout workflow in this repository is centered on V11, with older Cas9 knockout version files removed so the maintained entry point is unambiguous.
+Microbe-CRISPR-Library is a Python toolkit for CRISPR library design across microbial genomes, including bacterial and fungal workflows.
+It contains multiple design scripts for Cas9 and CASTs applications, with versioned pipelines that preserve reproducibility while enabling iterative optimization.
 
 ---
 
-## Current Cas9 Knockout Entry Point
+## Overview
 
-Use `Cas9_knockout_designer_v11.py` for knockout library design.
+This repository is designed for **batch library generation** rather than one-by-one guide picking.
+Typical outputs are:
 
-V11 combines the V10 global-candidate architecture with an additional dynamic spacing policy for short CDS genes, while preserving:
+- a success CSV containing final oligo-ready designs
+- a failure/partial CSV summarizing genes that did not meet target design count
 
-- dual input modes: FASTA+GFF3 or GBFF
-- Mt-aware deletion strategy selection via `--dele_model`
-- cut-window and legacy-length deletion modes
-- thread-safe global barcode allocation
-- final oligo assembly from a synthesis template
-- success and failure/partial CSV outputs
+The toolkit supports:
+
+- knockout library design
+- knockdown library design
+- promoter replacement workflows
+- C-terminal fusion workflows
+- CASTs insertion workflows
+
+---
+
+## Repository Structure and Design Logic
+
+The codebase uses a modular, script-per-mode architecture.
+
+### Core design principle
+
+- Keep each biological task in a dedicated script
+- Keep versioned files to preserve old behavior
+- Add new constraints as forward-compatible layers
+
+### Important scripts
+
+- `Bact-CRISPR-Library.py`
+  Main dispatcher for multi-mode usage
+- `Cas9_knockout_designer_v11.py`
+  Current Cas9 knockout entry point (V11, dynamic spacing adaptive version)
+- `Cas9_knockdown_designer_v1.py`
+- `Cas9_PromoterChange_designer_v2.py`
+- `Cas9_Cfusion_designer_v1.py`
+- `CASTs_designer_v3.py`
+- `CRISPR_knockin.py`
+  Dual-mode knockin designer (`N_start` and `C_stop`) for start-codon and stop-codon targeted insertion workflows
+
+For fungal knockout library generation, use:
+
+- `Cas9_knockout_designer_v11.py`
+
+---
+
+## CRISPR_knockin.py (Dual-Mode Knockin)
+
+`CRISPR_knockin.py` is derived from the V44 knockin engine and supports two insertion models in one script:
+- `--model N_start`
+  - insert payload before the gene start codon
+  - preserves V44 behavior and candidate-selection logic
+- `--model C_stop`
+  - insert payload before the gene stop codon
+  - intended for C-terminal fusion design (tag fusion use case)
+
+### Core design logic
+
+Both modes share the same high-level pipeline:
+
+1. parse CDS features from GBFF
+2. build strand-aware junction-centered sequence context
+3. scan PAMs around `junction ± search_window`
+4. generate candidates by strategy priority
+5. apply arm sanitization and RE filtering
+6. perform mutation-aware HA balancing and oligo assembly
+7. rank and select top designs per gene
+
+#### N_start mode
+
+- Junction: gene start codon boundary
+- LHA: upstream region ending at the start-codon boundary
+- RHA: coding-side region starting from start codon
+- Strategy family:
+  - Priority1 (deletion)
+  - Priority2 (bridge)
+  - Priority3 (RHA mutation)
+
+#### C_stop mode
+
+- Junction: stop codon boundary
+- LHA: coding-tail region ending before stop codon
+- RHA: downstream region after stop codon
+- Strategy family (v1):
+  - `CStop_P1_Del_Downstream`
+  - `CStop_P2_Bridge`
+  - `CStop_P2_Bridge_Mut`
+  - `CStop_P3_Mut_LHA`
+- Additional post-CDS validation:
+  - stop codon must be one of `TAA/TAG/TGA`
+
+### Mutation strategy
+
+Mutation logic is applied to both LHA and RHA in both modes:
+
+- Level 1: silent/synonymous mutation first
+- Level 2: conservative amino-acid-group substitution fallback
+
+This keeps PAM-breaking behavior consistent while minimizing coding impact.
+
+### Determinism and output stability
+
+- `--barcode_seed` controls deterministic barcode generation
+- same inputs + same seed produce reproducible outputs
+
+### Usage examples
+
+#### 1) N_start (V44-equivalent start-codon insertion)
+
+```bash
+python CRISPR_knockin.py \
+  --model N_start \
+  --gbff MG1655_genomic.gbff \
+  --template Knockin_J23100RBS_library_oligo_template.fasta \
+  --output CRISPR_Nstart_v1.csv \
+  --lha_len 70 --rha_len 70 \
+  --barcode_seed 42 \
+  --restriction_site GGTCTC --restriction_site GAAGAC
+```
+
+#### 2) C_stop (C-terminal fusion insertion before stop codon)
+
+```bash
+python CRISPR_knockin.py \
+  --model C_stop \
+  --gbff MG1655_genomic.gbff \
+  --template Cfusion_library_oligo_template.fasta \
+  --output CRISPR_Cstop_v1.csv \
+  --lha_len 70 --rha_len 70 \
+  --barcode_seed 42 \
+  --restriction_site GGTCTC --restriction_site GAAGAC
+```
+
+#### 3) Debug a single gene
+
+```bash
+python CRISPR_knockin.py \
+  --model C_stop \
+  --target_gene b0002 \
+  --gbff MG1655_genomic.gbff \
+  --template Cfusion_library_oligo_template.fasta \
+  --output debug_b0002_cstop.csv
+```
+
+---
+
+## Cas9 Knockout Pipeline (Conceptual Flow)
+
+`Cas9_knockout_designer_v11.py` wraps and extends the evolutionary chain from v9/v10.
+
+1. **Parse input genome and annotations**
+   - FASTA+GFF3 or GBFF mode
+2. **Build gene/CDS coordinate model**
+   - strand-aware 5' information
+3. **Enumerate sgRNA candidates**
+   - PAM scanning
+   - strand-aware reverse complement handling
+   - restriction-site filtering
+4. **Compute cut site per sgRNA**
+5. **Generate deletion candidates**
+   - strategy depends on `--dele_model`
+6. **Build homology arms**
+   - constrained by sequence availability and oligo budget
+7. **Generate barcodes**
+   - uniqueness + GC + repeat + restriction constraints
+8. **Assemble final synthesis oligo**
+   - via template placeholders
+9. **Rank candidates and select per-gene top designs**
+10. **Write success and failure CSV outputs**
+
+---
+
+## What V9 Adds
+
+V9 introduces a strategy router:
+
+```text
+--dele_model {normal, Mt}
+```
+
+- default: `normal`
+- `Mt`: force Mt deletion strategy (PAM-direction cut-window logic)
+- `normal`: force legacy/V7-style length-constrained deletion logic
+
+Startup audit lines are printed for traceability:
+
+- `[V9审计] 当前采用 Mt 删除策略`
+- `[V9审计] 当前采用 normal 删除策略`
 
 ---
 
 ## What V11 Adds
 
+V11 builds on the V10 global-candidate architecture with additional optimizations.
+
 ### 1. Dynamic design spacing
 
 V11 introduces CDS-length-aware spacing between multiple designs for the same gene:
 
-- CDS length `>= 2 x min_design_spacing`: keep the standard spacing constraint
-- CDS length `< 2 x min_design_spacing`: automatically switch spacing to `0 bp`
+- CDS length `>= 2 × min_design_spacing`: keep the standard spacing constraint
+- CDS length `< 2 × min_design_spacing`: automatically switch spacing to `0 bp`
 
 With the default `--min_design_spacing 100`, this means:
 
-- CDS `>= 200 bp`: target `100 bp` spacing
+- CDS `>= 200 bp`: target `100 bp` spacing between designs
 - CDS `< 200 bp`: allow overlapping designs to maximize two-design coverage
 
-### 2. Gradient fallback remains in place
+### 2. Gradient fallback
 
 For genes that still cannot satisfy the preferred spacing, V11 keeps the staged fallback logic:
 
@@ -47,37 +227,15 @@ When spacing falls back to `0`, V11 still tries to maximize dispersion across al
 
 ---
 
-## Other Maintained Designer
-
-The repository also contains `CRISPR_knockin.py`, a dual-mode knockin designer for start-codon (`N_start`) and stop-codon (`C_stop`) insertion workflows.
-
-- `N_start`: insert payload before the gene start codon
-- `C_stop`: insert payload before the gene stop codon for C-terminal fusion style designs
-- supports mutation-aware homology-arm balancing, restriction-site filtering, and deterministic barcode generation via `--barcode_seed`
-
-Example:
-
-```bash
-python CRISPR_knockin.py \
-  --model C_stop \
-  --gbff MG1655_genomic.gbff \
-  --template Cfusion_library_oligo_template.fasta \
-  --output CRISPR_Cstop_v1.csv \
-  --lha_len 70 --rha_len 70 \
-  --barcode_seed 42 \
-  --restriction_site GGTCTC --restriction_site GAAGAC
-```
-
----
-
 ## Installation
 
 Recommended:
 
 - Python 3.8+
-- pandas
-- biopython
-- gffutils
+- Dependencies:
+  - pandas
+  - biopython
+  - gffutils
 
 ```bash
 pip install pandas biopython gffutils
@@ -87,7 +245,7 @@ pip install pandas biopython gffutils
 
 ## Input Modes
 
-Choose one of the following:
+Choose one mode:
 
 - FASTA + GFF3
   - `--input_fna`
@@ -95,22 +253,18 @@ Choose one of the following:
 - GBFF
   - `--input_gbff`
 
-Do not mix FASTA/GFF input with GBFF input in the same run.
+Do not mix FASTA/GFF with GBFF in the same run.
 
 ---
 
 ## Output Files
 
-For `--output X.csv`, V11 writes:
+For `--output X.csv`, the pipeline writes:
 
-- `X.csv`: successful designs
-- `X_failed.csv`: failed or partial genes
-
-Successful output includes V11 multi-design tracking fields such as:
-
-- `Design Index`
-- `Cut Site Spacing`
-- `Deletion Warning`
+- `X.csv`
+  successful designs
+- `X_failed.csv`
+  failed/partial genes
 
 Status definitions:
 
@@ -119,66 +273,63 @@ Status definitions:
 
 ---
 
-## Key Parameters
+## Key Parameters (V11 Knockout)
 
-- `--output`: output CSV path
-- `--species`: currently supports `M_thermophila` and `E_coli`
-- `--synthesis_template`: oligo template file
-- `--sgRNA_num`: designs per gene, default `2`
-- `--barcode_len`: barcode length
-- `--restriction_site`: restriction sites to avoid
-- `--max_oligo_length`: total oligo length cap
-- `--num_workers`: thread count
-- `--dele_model {normal,Mt}`: deletion strategy
-- `--deletion_mode {auto,cut_window,legacy_length}`: deletion candidate generation mode
-- `--min_design_spacing`: V11 base spacing; short CDS genes can auto-relax to `0 bp`
+- `--output`
+- `--species`
+- `--synthesis_template`
+- `--sgRNA_num`
+- `--barcode_len`
+- `--restriction_site`
+- `--max_oligo_length`
+- `--num_workers`
+- `--dele_model {normal,Mt}`
+- `--deletion_mode {auto,cut_window,legacy_length}`
+- `--min_design_spacing` (V11: short CDS genes auto-relax to `0 bp`)
 
-Deletion-specific parameters:
+Deletion-specific:
 
-- `cut_window` mode:
-  - `--cut_window`, e.g. `20:100`
-- `legacy_length` mode:
-  - `--del_length_per`, e.g. `10%:80%`
-  - `--del_length_bp`, e.g. `300:1000`
+- Mt / cut_window route:
+  - `--cut_window` (e.g. `20:100`)
+- normal / legacy_length route:
+  - `--del_length_per` (e.g. `10%:80%`)
+  - `--del_length_bp` (e.g. `300:1000`)
 
 ---
 
 ## Usage Examples
 
-### 1. M. thermophila GBFF mode with Mt strategy
+### 1) Mt strategy (PAM-direction cut-window)
 
 ```bash
 python Cas9_knockout_designer_v11.py \
+  --dele_model Mt \
   --input_gbff Mt_genomic.gbff \
-  --output Mt_V11_KO.csv \
+  --output Mt_V11_Mt_KO.csv \
   --synthesis_template Mt_knockout_library_oligo_template.txt \
   --species M_thermophila \
-  --dele_model Mt \
-  --deletion_mode cut_window \
-  --cut_window 20:100 \
+  --barcode_len 11 \
+  --max_oligo_length 300 \
+  --restriction_site GGTCTC GAAGAC
+```
+
+### 2) normal strategy (legacy length constraints)
+
+```bash
+python Cas9_knockout_designer_v11.py \
+  --dele_model normal \
+  --input_gbff Mt_genomic.gbff \
+  --output Mt_V11_normal_KO.csv \
+  --synthesis_template Mt_knockout_library_oligo_template.txt \
+  --species M_thermophila \
   --barcode_len 11 \
   --max_oligo_length 300 \
   --restriction_site GGTCTC GAAGAC \
-  --num_workers 8
+  --del_length_per 10%:80% \
+  --del_length_bp 300:1000
 ```
 
-### 2. FASTA + GFF mode with explicit legacy deletion bounds
-
-```bash
-python Cas9_knockout_designer_v11.py \
-  --input_fna genome.fna \
-  --input_gff genome.gff \
-  --output KO_from_fna_gff.csv \
-  --synthesis_template Mt_knockout_library_oligo_template.txt \
-  --species E_coli \
-  --dele_model normal \
-  --deletion_mode legacy_length \
-  --del_length_per 20%:80% \
-  --del_length_bp 300:1000 \
-  --barcode_len 10
-```
-
-### 3. Override V11 base spacing
+### 3) Override V11 base spacing
 
 ```bash
 python Cas9_knockout_designer_v11.py \
@@ -191,34 +342,3 @@ python Cas9_knockout_designer_v11.py \
 ```
 
 With `--min_design_spacing 80`, genes with CDS shorter than `160 bp` will automatically run with `0 bp` spacing.
-
----
-
-## Practical Guidance
-
-- Use `--dele_model Mt` for the M. thermophila strand-aware deletion strategy.
-- Use `--deletion_mode auto` if you want the species-default mode selected automatically.
-- In `legacy_length` mode, you must provide at least one of `--del_length_per` or `--del_length_bp`.
-- If many genes remain `Partial`, first inspect restriction-site filters, oligo-length budget, and deletion bounds.
-- If you want stricter multi-design diversity on long genes, increase `--min_design_spacing`.
-
----
-
-## Conceptual Pipeline
-
-1. Parse genome and annotations from FASTA+GFF3 or GBFF.
-2. Build CDS-aware gene models with strand-specific 5' coordinates.
-3. Enumerate sgRNA candidates and score them.
-4. Compute cut sites using the selected deletion strategy.
-5. Generate deletion candidates in cut-window or legacy-length mode.
-6. Build a global candidate pool per gene.
-7. Select multiple designs using V11 dynamic spacing and fallback rules.
-8. Construct homology arms and synthesis oligos.
-9. Generate globally unique barcodes across threads.
-10. Write success and failure CSV outputs.
-
----
-
-## Notes
-
-This repository generates computational design candidates. Experimental validation is still required for each target strain, genome annotation set, and editing workflow.
