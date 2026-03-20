@@ -43,8 +43,8 @@ The codebase uses a modular, script-per-mode architecture.
 - `Cas9_PromoterChange_designer_v2.py`
 - `Cas9_Cfusion_designer_v1.py`
 - `CASTs_designer_v3.py`
-- `CRISPR_knockin.py`
-  Dual-mode knockin designer (`N_start` and `C_stop`) for start-codon and stop-codon targeted insertion workflows
+- `CRISPR_knockin_v6_standalone.py`
+  Self-contained dual-mode knockin designer (`N_start` and `C_stop`) with inlined logic and no dependency on external `knockin_J23119RBS_V*.py` files
 
 For fungal knockout library generation, use:
 
@@ -52,15 +52,17 @@ For fungal knockout library generation, use:
 
 ---
 
-## CRISPR_knockin.py (Dual-Mode Knockin)
+## CRISPR_knockin_v6_standalone.py (Standalone Dual-Mode Knockin)
 
-`CRISPR_knockin.py` is derived from the V44 knockin engine and supports two insertion models in one script:
+`CRISPR_knockin_v6_standalone.py` is a fully self-contained knockin designer that supports two insertion models in one script:
 - `--model N_start`
   - insert payload before the gene start codon
-  - preserves V44 behavior and candidate-selection logic
+  - V46-equivalent start-codon targeting workflow
 - `--model C_stop`
   - insert payload before the gene stop codon
   - intended for C-terminal fusion design (tag fusion use case)
+
+The script accepts `--payload` as either a literal sequence or a FASTA file, and writes oligo-ready CSV output directly from a single standalone file.
 
 ### Core design logic
 
@@ -89,13 +91,14 @@ Both modes share the same high-level pipeline:
 - Junction: stop codon boundary
 - LHA: coding-tail region ending before stop codon
 - RHA: downstream region after stop codon
-- Strategy family (v1):
+- Strategy family:
   - `CStop_P1_Del_Downstream`
   - `CStop_P2_Bridge`
   - `CStop_P2_Bridge_Mut`
   - `CStop_P3_Mut_LHA`
 - Additional post-CDS validation:
   - stop codon must be one of `TAA/TAG/TGA`
+- Overlap-aware handling keeps the fusion open while protecting neighboring CDS sequence when adjacent genes share bases
 
 ### Mutation strategy
 
@@ -106,46 +109,58 @@ Mutation logic is applied to both LHA and RHA in both modes:
 
 This keeps PAM-breaking behavior consistent while minimizing coding impact.
 
-### Determinism and output stability
+### Standalone V6 updates
 
+- all knockin logic is inlined into one file for easier reuse and repository distribution
+- genome-wide sgRNA specificity filtering is available through `--max_offtargets`
+- `--rank2_sim_max` controls diversity-aware Rank2 selection in `C_stop` mode
 - `--barcode_seed` controls deterministic barcode generation
 - same inputs + same seed produce reproducible outputs
+- balanced HA trimming, flexible HA lengths, and restriction-site exclusion are retained in the standalone workflow
 
 ### Usage examples
 
-#### 1) N_start (V44-equivalent start-codon insertion)
+#### 1) N_start (start-codon insertion)
 
 ```bash
-python CRISPR_knockin.py \
+python CRISPR_knockin_v6_standalone.py \
   --model N_start \
   --gbff MG1655_genomic.gbff \
+  --payload J23119_RBS \
   --template Knockin_J23100RBS_library_oligo_template.fasta \
-  --output CRISPR_Nstart_v1.csv \
+  --output CRISPR_Nstart_v6.csv \
+  --num_designs 2 \
   --lha_len 70 --rha_len 70 \
   --barcode_seed 42 \
+  --max_offtargets 0 \
   --restriction_site GGTCTC --restriction_site GAAGAC
 ```
 
 #### 2) C_stop (C-terminal fusion insertion before stop codon)
 
 ```bash
-python CRISPR_knockin.py \
+python CRISPR_knockin_v6_standalone.py \
   --model C_stop \
   --gbff MG1655_genomic.gbff \
+  --payload J23119_RBS \
   --template Cfusion_library_oligo_template.fasta \
-  --output CRISPR_Cstop_v1.csv \
+  --output CRISPR_Cstop_v6.csv \
+  --num_designs 2 \
   --lha_len 70 --rha_len 70 \
   --barcode_seed 42 \
+  --rank2_sim_max 50 \
+  --max_offtargets 0 \
   --restriction_site GGTCTC --restriction_site GAAGAC
 ```
 
 #### 3) Debug a single gene
 
 ```bash
-python CRISPR_knockin.py \
+python CRISPR_knockin_v6_standalone.py \
   --model C_stop \
   --target_gene b0002 \
   --gbff MG1655_genomic.gbff \
+  --payload J23119_RBS \
   --template Cfusion_library_oligo_template.fasta \
   --output debug_b0002_cstop.csv
 ```
